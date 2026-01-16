@@ -73,7 +73,7 @@ def process_signatures_file() -> None:
     df["Participante"] = (
         df["Nombre"].str.strip() + " " + df["Apellido(s)"].str.strip()
     )
-    participants = df["Participante"].tolist()
+    participants = sorted(df["Participante"].tolist(), key=lambda x: x.lower())
 
     # Crear libro de Excel
     wb = Workbook()
@@ -87,13 +87,19 @@ def process_signatures_file() -> None:
         top=Side(style="thin"),
         bottom=Side(style="thin"),
     )
+    thick_border = Border(
+        left=Side(style="thick"),
+        right=Side(style="thick"),
+        top=Side(style="thick"),
+        bottom=Side(style="thick"),
+    )
     left_alignment = Alignment(horizontal="left", vertical="center")
     center_alignment = Alignment(horizontal="center", vertical="center")
 
     # Dimensiones de columna
     ws.column_dimensions["A"].width = 15  # Nombre
-    ws.column_dimensions["B"].width = 25  # Apellidos
-    ws.column_dimensions["C"].width = 30  # Firma
+    ws.column_dimensions["B"].width = 15  # Apellidos (aprox. 10 caracteres)
+    ws.column_dimensions["C"].width = 12  # Firma (aprox. 10 caracteres)
     ws.row_dimensions[1].height = 20
 
     # Escribir encabezados
@@ -115,22 +121,39 @@ def process_signatures_file() -> None:
             nombre = parts[0]
             apellidos = ""
 
-        # Columna A: Nombre
-        cell_nombre = ws.cell(row=current_row, column=1, value=nombre)
-        cell_nombre.border = thin_border
-        cell_nombre.alignment = left_alignment
+        pos_in_block = idx % 8
+        is_first_row = pos_in_block == 0
+        is_last_row = pos_in_block == 7 or idx == len(participants) - 1
+
+        for col in range(1, 4):
+            # Bordes por defecto finos
+            left = "thick" if col == 1 else "thin"
+            right = "thick" if col == 3 else "thin"
+            top = "thick" if is_first_row else "thin"
+            bottom = "thick" if is_last_row else "thin"
+
+            border = Border(
+                left=Side(style=left),
+                right=Side(style=right),
+                top=Side(style=top),
+                bottom=Side(style=bottom),
+            )
+
+            if col == 1:
+                value = nombre
+                alignment = left_alignment
+            elif col == 2:
+                value = apellidos
+                alignment = left_alignment
+            else:
+                value = ""
+                alignment = left_alignment
+
+            cell = ws.cell(row=current_row, column=col, value=value)
+            cell.border = border
+            cell.alignment = alignment
+
         ws.row_dimensions[current_row].height = 25
-
-        # Columna B: Apellidos
-        cell_apellidos = ws.cell(row=current_row, column=2, value=apellidos)
-        cell_apellidos.border = thin_border
-        cell_apellidos.alignment = left_alignment
-
-        # Columna C: Firma (vacío)
-        cell_firma = ws.cell(row=current_row, column=3, value="")
-        cell_firma.border = thin_border
-        cell_firma.alignment = left_alignment
-
         current_row += 1
 
         # Agregar espacio entre bloques de 8
