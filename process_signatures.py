@@ -53,10 +53,10 @@ def get_participants() -> list:
         print(f"Error: El archivo no contiene las columnas {required_columns}")
         print(f"Columnas encontradas: {list(df.columns)}")
         return []
-    df["Participant"] = (
-        df["Nombre"].str.strip() + " " + df["Apellido(s)"].str.strip()
-    )
-    return sorted(df["Participant"].tolist(), key=lambda x: x.lower())
+    df["Nombre"] = df["Nombre"].str.strip()
+    df["Apellido(s)"] = df["Apellido(s)"].str.strip()
+    participants = list(zip(df["Nombre"], df["Apellido(s)"]))
+    return sorted(participants, key=lambda x: x[0].lower())
 
 def create_sign_sheet(participant_list: list, output_path: Path) -> None:
     """
@@ -84,8 +84,14 @@ def create_sign_sheet(participant_list: list, output_path: Path) -> None:
     left_alignment = Alignment(horizontal="left", vertical="center")
     center_alignment = Alignment(horizontal="center", vertical="center")
     ws.column_dimensions["A"].width = 15
-    ws.column_dimensions["B"].width = 15
+    ws.column_dimensions["B"].width = 30
     ws.column_dimensions["C"].width = 12
+    ws.column_dimensions["D"].width = 5
+    ws.column_dimensions["E"].width = 5
+    ws.column_dimensions["F"].width = 15
+    ws.column_dimensions["G"].width = 30
+    ws.column_dimensions["H"].width = 12
+
     ws.row_dimensions[1].height = 20
     headers = ["Nombre", "Apellidos", "Firma"]
     for col_idx, header in enumerate(headers, 1):
@@ -112,12 +118,7 @@ def create_sign_sheet(participant_list: list, output_path: Path) -> None:
         block_participants = participant_list[table_idx * table_rows : (table_idx + 1) * table_rows]
 
         for row_in_table, participant in enumerate(block_participants):
-            parts = participant.rsplit(" ", 1)
-            if len(parts) == 2:
-                first_name, last_name = parts
-            else:
-                first_name = parts[0]
-                last_name = ""
+            first_name, last_name = participant
             is_first_row = row_in_table == 0
             is_last_row = row_in_table == table_rows - 1 or row_in_table == len(block_participants) - 1
             for col_in_table in range(table_cols):
