@@ -93,44 +93,58 @@ def create_sign_sheet(participant_list: list, output_path: Path) -> None:
         cell.border = thin_border
         cell.alignment = center_alignment
         cell.font = Font(bold=True)
-    current_row = 2
-    for idx, participant in enumerate(participant_list):
-        parts = participant.rsplit(" ", 1)
-        if len(parts) == 2:
-            first_name, last_name = parts
-        else:
-            first_name = parts[0]
-            last_name = ""
-        pos_in_block = idx % 8
-        is_first_row = pos_in_block == 0
-        is_last_row = pos_in_block == 7 or idx == len(participant_list) - 1
-        for col in range(1, 4):
-            left = "thick" if col == 1 else "thin"
-            right = "thick" if col == 3 else "thin"
-            top = "thick" if is_first_row else "thin"
-            bottom = "thick" if is_last_row else "thin"
-            border = Border(
-                left=Side(style=left),
-                right=Side(style=right),
-                top=Side(style=top),
-                bottom=Side(style=bottom),
-            )
-            if col == 1:
-                value = first_name
-                alignment = left_alignment
-            elif col == 2:
-                value = last_name
-                alignment = left_alignment
+    # Nueva lógica: escribir tablas de 8 participantes en parejas horizontales
+    tables_per_row = 2  # número de tablas por fila
+    table_rows = 8      # filas por tabla
+    table_cols = 3      # columnas por tabla
+    table_h_spacing = 2 # espacio entre tablas horizontal
+    table_v_spacing = 2 # espacio entre tablas vertical
+
+    num_tables = (len(participant_list) + table_rows - 1) // table_rows
+    for table_idx in range(num_tables):
+        # Calcular posición de la tabla
+        row_block = table_idx // tables_per_row
+        col_block = table_idx % tables_per_row
+        start_row = 2 + row_block * (table_rows + table_v_spacing)
+        start_col = 1 + col_block * (table_cols + table_h_spacing)
+
+        # Obtener participantes de este bloque
+        block_participants = participant_list[table_idx * table_rows : (table_idx + 1) * table_rows]
+
+        for row_in_table, participant in enumerate(block_participants):
+            parts = participant.rsplit(" ", 1)
+            if len(parts) == 2:
+                first_name, last_name = parts
             else:
-                value = ""
-                alignment = left_alignment
-            cell = ws.cell(row=current_row, column=col, value=value)
-            cell.border = border
-            cell.alignment = alignment
-        ws.row_dimensions[current_row].height = 25
-        current_row += 1
-        if (idx + 1) % 8 == 0 and (idx + 1) < len(participant_list):
-            current_row += 2
+                first_name = parts[0]
+                last_name = ""
+            is_first_row = row_in_table == 0
+            is_last_row = row_in_table == table_rows - 1 or row_in_table == len(block_participants) - 1
+            for col_in_table in range(table_cols):
+                col = start_col + col_in_table
+                left = "thick" if col_in_table == 0 else "thin"
+                right = "thick" if col_in_table == table_cols - 1 else "thin"
+                top = "thick" if is_first_row else "thin"
+                bottom = "thick" if is_last_row else "thin"
+                border = Border(
+                    left=Side(style=left),
+                    right=Side(style=right),
+                    top=Side(style=top),
+                    bottom=Side(style=bottom),
+                )
+                if col_in_table == 0:
+                    value = first_name
+                    alignment = left_alignment
+                elif col_in_table == 1:
+                    value = last_name
+                    alignment = left_alignment
+                else:
+                    value = ""
+                    alignment = left_alignment
+                cell = ws.cell(row=start_row + row_in_table, column=col, value=value)
+                cell.border = border
+                cell.alignment = alignment
+            ws.row_dimensions[start_row + row_in_table].height = 25
     try:
         wb.save(output_path)
         print(f"✓ Archivo generado exitosamente en: {output_path}")
