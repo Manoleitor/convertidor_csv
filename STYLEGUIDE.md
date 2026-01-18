@@ -48,11 +48,13 @@ Librerías de terceros (ej. pandas, requests).
 
 Aplicaciones locales del proyecto.
 
-5. Tipado (Type Hinting)
+5. **Tipado (Type Hinting)**
    Se recomienda el uso de anotaciones de tipo para mejorar la claridad y el uso de linters.
-
 
 This project follows:
 
 - Google Python Style Guide
   https://google.github.io/styleguide/pyguide.html
+
+6. Tamaño de las funciones.
+   Habitualmente las funciones deberan tener entre 5 y 28 lineas de código

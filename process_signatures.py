@@ -5,7 +5,6 @@ y genera una hoja de cálculo con participantes agrupados de 8 en 8
 organizados en 3 columnas por bloque.
 """
 
-import os
 import re
 from pathlib import Path
 import pandas as pd
