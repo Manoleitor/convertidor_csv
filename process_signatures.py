@@ -61,13 +61,13 @@ def get_participants() -> list:
     participants = list(zip(df["Nombre"], df["Apellido(s)"]))
     return sorted(participants, key=lambda x: x[0].lower())
 
-def create_sign_sheet(participant_list: list, output_path: Path) -> None:
+def create_sign_sheet_workbook(participant_list: list) -> Workbook:
     """
-    Crea y guarda la hoja de firmas en Excel.
-
+    Crea y retorna el objeto Workbook de la hoja de firmas en Excel.
     Args:
         participant_list: Lista de participantes (str).
-        output_path: Ruta de salida del archivo Excel.
+    Returns:
+        openpyxl.Workbook
     """
     wb = Workbook()
     ws = wb.active
@@ -94,7 +94,6 @@ def create_sign_sheet(participant_list: list, output_path: Path) -> None:
     ws.column_dimensions["F"].width = 15
     ws.column_dimensions["G"].width = 30
     ws.column_dimensions["H"].width = 12
-
     ws.row_dimensions[1].height = 20
     headers = ["Nombre", "Apellidos", "Firma"]
     for col_idx, header in enumerate(headers, 1):
@@ -102,24 +101,18 @@ def create_sign_sheet(participant_list: list, output_path: Path) -> None:
         cell.border = thin_border
         cell.alignment = center_alignment
         cell.font = Font(bold=True)
-    # Nueva lógica: escribir tablas de 8 participantes en parejas horizontales
-    tables_per_row = 2  # número de tablas por fila
-    table_rows = 8      # filas por tabla
-    table_cols = 3      # columnas por tabla
-    table_h_spacing = 2 # espacio entre tablas horizontal
-    table_v_spacing = 2 # espacio entre tablas vertical
-
+    tables_per_row = 2
+    table_rows = 8
+    table_cols = 3
+    table_h_spacing = 2
+    table_v_spacing = 2
     num_tables = (len(participant_list) + table_rows - 1) // table_rows
     for table_idx in range(num_tables):
-        # Calcular posición de la tabla
         row_block = table_idx // tables_per_row
         col_block = table_idx % tables_per_row
         start_row = 2 + row_block * (table_rows + table_v_spacing)
         start_col = 1 + col_block * (table_cols + table_h_spacing)
-
-        # Obtener participantes de este bloque
         block_participants = participant_list[table_idx * table_rows : (table_idx + 1) * table_rows]
-
         for row_in_table, participant in enumerate(block_participants):
             first_name, last_name = participant
             is_first_row = row_in_table == 0
@@ -149,31 +142,21 @@ def create_sign_sheet(participant_list: list, output_path: Path) -> None:
                 cell.border = border
                 cell.alignment = alignment
             ws.row_dimensions[start_row + row_in_table].height = 25
-    try:
-        wb.save(output_path)
-        print(f"✓ Archivo generado exitosamente en: {output_path}")
-        print(f"✓ Total de participantes procesados: {len(participant_list)}")
-    except Exception as e:
-        print(f"Error al guardar el archivo: {e}")
+    return wb
 
-# Nuevo método para crear PDF de hoja de firmas
-def create_sign_pdf(participant_list: list, output_path: Path, subject: str = None, group: str = None, week: int = None, day1: str = 'primera', day2: str = 'segunda') -> None:
-    """
-    Crea y guarda la hoja de firmas en PDF usando WeasyPrint y Jinja2.
+def save_workbook(wb: Workbook, output_path: Path) -> None:
+    wb.save(output_path)
 
-    Args:
-        participant_list: Lista de participantes (str).
-        output_path: Ruta de salida del archivo PDF.
-        subject: Nombre de la asignatura (opcional).
+def create_sign_pdf_html(participant_list: list, subject: str = None, group: str = None, week: int = None, day1: str = 'primera', day2: str = 'segunda') -> str:
     """
-    # Agrupar participantes en bloques de 8
+    Genera el HTML para la hoja de firmas en PDF usando Jinja2.
+    Returns:
+        HTML string
+    """
     table_rows = 8
     tables_per_row = 2
     blocks = [participant_list[i:i+table_rows] for i in range(0, len(participant_list), table_rows)]
-    # Agrupar bloques en filas de dos
     block_pairs = [blocks[i:i+tables_per_row] for i in range(0, len(blocks), tables_per_row)]
-
-    # HTML y CSS para la hoja de firmas
     html_template = """
     <!DOCTYPE html>
     <html lang='es'>
@@ -216,20 +199,6 @@ def create_sign_pdf(participant_list: list, output_path: Path, subject: str = No
             letter-spacing: 1px;
             margin: 0;
         }
-        .subject-box {
-            background: {{ '#e0e0e0' if subject else '#f5f5f5' }};
-            border: 1px solid #888;
-            border-radius: 6px;
-            padding: 6px 18px;
-            font-size: 13px;
-            font-weight: bold;
-            color: #222;
-            letter-spacing: 1px;
-            box-shadow: 0 1px 4px #bbb;
-        }
-        .subject-placeholder {
-            color: #aaa;
-        }
         .row {
             display: flex;
             flex-direction: row;
@@ -266,7 +235,6 @@ def create_sign_pdf(participant_list: list, output_path: Path, subject: str = No
             font-style: italic;
             font-size: 8px;
         }
-        /* Filas alternas en gris claro */
         tr:nth-child(even) td {
             background: #f6f6f6;
         }
@@ -298,7 +266,8 @@ def create_sign_pdf(participant_list: list, output_path: Path, subject: str = No
                     <tr>
                         <th>Nombre</th>
                         <th>Apellidos</th>
-                        <th class="firma" colspan="2">Firma</th>
+                        <th class="firma">{{ day1 }}</th>
+                        <th class="firma">{{ day2 }}</th>
                     </tr>
                     {% for participant in block %}
                     <tr>
@@ -316,13 +285,10 @@ def create_sign_pdf(participant_list: list, output_path: Path, subject: str = No
     </html>
     """
     template = Template(html_template)
-    html_content = template.render(block_pairs=block_pairs, subject=subject, group=group, week=week, day1=day1, day2=day2)
-    try:
-        HTML(string=html_content).write_pdf(str(output_path))
-        print(f"✓ PDF generado exitosamente en: {output_path}")
-        print(f"✓ Total de participantes procesados: {len(participant_list)}")
-    except Exception as e:
-        print(f"Error al generar el PDF: {e}")
+    return template.render(block_pairs=block_pairs, subject=subject, group=group, week=week, day1=day1, day2=day2)
+
+def save_pdf_from_html(html_content: str, output_path: Path) -> None:
+    HTML(string=html_content).write_pdf(str(output_path))
 
 def process_signatures_file() -> None:
     """
@@ -335,7 +301,7 @@ def process_signatures_file() -> None:
     participant_list = get_participants()
     if not participant_list:
         return
-    create_sign_sheet(participant_list, output_path)
+    create_sign_sheet_workbook(participant_list)
     # Solicitar nombre de asignatura al usuario
     import sys
     subject = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1].strip() else None
@@ -354,7 +320,8 @@ def process_signatures_file() -> None:
         day2 = ''
     if not day2:
         day2 = 'segunda'
-    create_sign_pdf(participant_list, pdf_output_path, subject, group, week, day1, day2)
+    save_workbook(create_sign_sheet_workbook(participant_list), output_path)
+    save_pdf_from_html(create_sign_pdf_html(participant_list, subject, group, week, day1, day2), pdf_output_path)
     print("✓ PDF de firmas también generado en result/hoja_firmas.pdf")
 
 if __name__ == "__main__":
