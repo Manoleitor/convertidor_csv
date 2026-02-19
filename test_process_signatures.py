@@ -5,10 +5,19 @@ from process_signatures import (
     create_sign_sheet_workbook,
     save_workbook,
     create_sign_pdf_html,
-    save_pdf_from_html
+    save_pdf_from_html,
+    _setup_styles,
+    _get_cell_border,
+    _setup_column_widths,
+    _write_participant_tables,
+    _write_headers,
+    _write_single_table,
+    create_sign_sheet_workbook
 )
 import os
 from openpyxl import load_workbook
+from openpyxl.styles import Border, Alignment
+from openpyxl import Workbook
 
 class TestProcessSignatures(unittest.TestCase):
     def setUp(self):
@@ -57,6 +66,42 @@ class TestProcessSignatures(unittest.TestCase):
         # Comprobar que la hoja tiene el nombre correcto
         loaded = load_workbook(self.excel_path)
         self.assertIn("Firmas", loaded.sheetnames)
+
+    def test_setup_styles(self):
+        styles = _setup_styles()
+        self.assertIn('thin_border', styles)
+        self.assertIn('thick_border', styles)
+        self.assertIn('left_alignment', styles)
+        self.assertIn('center_alignment', styles)
+        self.assertIsInstance(styles['thin_border'], Border)
+        self.assertIsInstance(styles['thick_border'], Border)
+        self.assertIsInstance(styles['left_alignment'], Alignment)
+        self.assertIsInstance(styles['center_alignment'], Alignment)
+
+    def test_setup_column_widths(self):
+        wb = Workbook()
+        ws = wb.active
+        _setup_column_widths(ws)
+        # Check that the first three columns have the expected width
+        self.assertGreaterEqual(ws.column_dimensions['A'].width, 10)
+        self.assertGreaterEqual(ws.column_dimensions['B'].width, 10)
+        self.assertGreaterEqual(ws.column_dimensions['C'].width, 10)
+        self.assertGreaterEqual(ws.column_dimensions['D'].width, 5)
+        self.assertGreaterEqual(ws.column_dimensions['E'].width, 5)
+        self.assertGreaterEqual(ws.column_dimensions['F'].width, 10)
+        self.assertGreaterEqual(ws.column_dimensions['G'].width, 10)
+        self.assertGreaterEqual(ws.column_dimensions['H'].width, 10)
+
+    #test para _write_headers
+    def test_write_headers(self):
+        wb = Workbook()
+        ws = wb.active
+        styles = _setup_styles()
+        _write_headers(ws, styles)
+        self.assertEqual(ws.cell(row=1, column=1).value, "Nombre")
+        self.assertEqual(ws.cell(row=1, column=2).value, "Apellidos")
+        # self.assertEqual(ws.cell(row=1, column=6).value, "Nombre")
+        # self.assertEqual(ws.cell(row=1, column=7).value, "Apellidos")
 
     def test_create_sign_pdf_html_and_save(self):
         html = create_sign_pdf_html(self.test_participants, subject="Test", group="T1", week=1, day1="Lunes", day2="Viernes")

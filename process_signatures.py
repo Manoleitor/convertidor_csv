@@ -61,31 +61,44 @@ def get_participants() -> list:
     participants = list(zip(df["Nombre"], df["Apellido(s)"]))
     return sorted(participants, key=lambda x: x[0].lower())
 
-def create_sign_sheet_workbook(participant_list: list) -> Workbook:
+from openpyxl import Workbook
+from openpyxl.styles import Border, Side, Alignment, Font
+from openpyxl.worksheet.worksheet import Worksheet
+
+def create_sign_sheet_workbook(participant_list: list[tuple[str, str]]) -> Workbook:
     """
-    Crea y retorna el objeto Workbook de la hoja de firmas en Excel.
-    Args:
-        participant_list: Lista de participantes (str).
-    Returns:
-        openpyxl.Workbook
+    Crea la hoja de firmas en Excel con diseño profesional de 2 tablas por fila.
     """
     wb = Workbook()
     ws = wb.active
     ws.title = "Firmas"
-    thin_border = Border(
-        left=Side(style="thin"),
-        right=Side(style="thin"),
-        top=Side(style="thin"),
-        bottom=Side(style="thin"),
-    )
-    thick_border = Border(
-        left=Side(style="thick"),
-        right=Side(style="thick"),
-        top=Side(style="thick"),
-        bottom=Side(style="thick"),
-    )
+
+    styles = _setup_styles()
+    _setup_column_widths(ws)
+    _write_headers(ws, styles)
+    _write_participant_tables(ws, participant_list, styles)
+
+    return wb
+
+def _setup_styles() -> dict:
+    """Define y retorna todos los estilos reutilizables."""
+
+    thin_border = Border(left=Side("thin"), right=Side("thin"),
+                         top=Side("thin"), bottom=Side("thin"))
+    thick_border = Border(left=Side("thick"), right=Side("thick"),
+                          top=Side("thick"), bottom=Side("thick"))
     left_alignment = Alignment(horizontal="left", vertical="center")
     center_alignment = Alignment(horizontal="center", vertical="center")
+
+    return {
+        "thin_border": thin_border,
+        "thick_border": thick_border,
+        "left_alignment": left_alignment,
+        "center_alignment": center_alignment,
+    }
+
+def _setup_column_widths(ws: Worksheet) -> None:
+    """Configura anchos de columna y altura de fila de encabezado."""
     ws.column_dimensions["A"].width = 15
     ws.column_dimensions["B"].width = 30
     ws.column_dimensions["C"].width = 12
@@ -95,54 +108,64 @@ def create_sign_sheet_workbook(participant_list: list) -> Workbook:
     ws.column_dimensions["G"].width = 30
     ws.column_dimensions["H"].width = 12
     ws.row_dimensions[1].height = 20
+
+def _write_headers(ws: Worksheet, styles: dict) -> None:
+    """Escribe los encabezados de las tablas usando los estilos dados."""
     headers = ["Nombre", "Apellidos", "Firma"]
     for col_idx, header in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col_idx, value=header)
-        cell.border = thin_border
-        cell.alignment = center_alignment
+        cell.border = styles["thin_border"]
+        cell.alignment = styles["center_alignment"]
         cell.font = Font(bold=True)
-    tables_per_row = 2
-    table_rows = 8
-    table_cols = 3
-    table_h_spacing = 2
-    table_v_spacing = 2
-    num_tables = (len(participant_list) + table_rows - 1) // table_rows
-    for table_idx in range(num_tables):
-        row_block = table_idx // tables_per_row
-        col_block = table_idx % tables_per_row
-        start_row = 2 + row_block * (table_rows + table_v_spacing)
-        start_col = 1 + col_block * (table_cols + table_h_spacing)
-        block_participants = participant_list[table_idx * table_rows : (table_idx + 1) * table_rows]
-        for row_in_table, participant in enumerate(block_participants):
-            first_name, last_name = participant
-            is_first_row = row_in_table == 0
-            is_last_row = row_in_table == table_rows - 1 or row_in_table == len(block_participants) - 1
-            for col_in_table in range(table_cols):
-                col = start_col + col_in_table
-                left = "thick" if col_in_table == 0 else "thin"
-                right = "thick" if col_in_table == table_cols - 1 else "thin"
-                top = "thick" if is_first_row else "thin"
-                bottom = "thick" if is_last_row else "thin"
-                border = Border(
-                    left=Side(style=left),
-                    right=Side(style=right),
-                    top=Side(style=top),
-                    bottom=Side(style=bottom),
-                )
-                if col_in_table == 0:
-                    value = first_name
-                    alignment = left_alignment
-                elif col_in_table == 1:
-                    value = last_name
-                    alignment = left_alignment
-                else:
-                    value = ""
-                    alignment = left_alignment
-                cell = ws.cell(row=start_row + row_in_table, column=col, value=value)
-                cell.border = border
-                cell.alignment = alignment
-            ws.row_dimensions[start_row + row_in_table].height = 25
-    return wb
+
+
+def _write_participant_tables(ws: Worksheet, participant_list: list[tuple[str, str]], styles: dict) -> None:
+    """Escribe todas las tablas de firmas (2 por fila)."""
+    TABLES_PER_ROW = 2
+    ROWS_PER_TABLE = 8
+    H_SPACING = 2
+    V_SPACING = 2
+
+    total_tables = (len(participant_list) + ROWS_PER_TABLE - 1) // ROWS_PER_TABLE
+
+    for table_idx in range(total_tables):
+        row_block = table_idx // TABLES_PER_ROW
+        col_block = table_idx % TABLES_PER_ROW
+
+        start_row = 2 + row_block * (ROWS_PER_TABLE + V_SPACING)
+        start_col = 1 + col_block * (3 + H_SPACING)
+
+        participants_chunk = participant_list[table_idx * ROWS_PER_TABLE : (table_idx + 1) * ROWS_PER_TABLE]
+
+        _write_single_table(ws, participants_chunk, start_row, start_col, styles)
+
+
+def _write_single_table(ws: Worksheet, participants: list[tuple[str, str]], 
+                       start_row: int, start_col: int, styles: dict) -> None:
+    """Escribe una sola tabla de 8 filas máximo."""
+    for row_offset, (first_name, last_name) in enumerate(participants):
+        row = start_row + row_offset
+        is_first_row = row_offset == 0
+        is_last_row = row_offset == len(participants) - 1
+        for col_offset in range(3):
+            col = start_col + col_offset
+            border = _get_cell_border(col_offset, is_first_row, is_last_row)
+            value = [first_name, last_name, ""][col_offset]
+            alignment = styles["left_alignment"]
+            cell = ws.cell(row=row, column=col, value=value)
+            cell.border = border
+            cell.alignment = alignment
+        ws.row_dimensions[row].height = 25
+
+
+def _get_cell_border(col_offset: int, is_first_row: bool, is_last_row: bool) -> Border:
+    """Devuelve el borde correcto según posición en la tabla."""
+    return Border(
+        left=Side("thick" if col_offset == 0 else "thin"),
+        right=Side("thick" if col_offset == 2 else "thin"),
+        top=Side("thick" if is_first_row else "thin"),
+        bottom=Side("thick" if is_last_row else "thin"),
+    )
 
 def save_workbook(wb: Workbook, output_path: Path) -> None:
     wb.save(output_path)
