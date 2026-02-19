@@ -61,31 +61,44 @@ def get_participants() -> list:
     participants = list(zip(df["Nombre"], df["Apellido(s)"]))
     return sorted(participants, key=lambda x: x[0].lower())
 
-def create_sign_sheet(participant_list: list, output_path: Path) -> None:
-    """
-    Crea y guarda la hoja de firmas en Excel.
+from openpyxl import Workbook
+from openpyxl.styles import Border, Side, Alignment, Font
+from openpyxl.worksheet.worksheet import Worksheet
 
-    Args:
-        participant_list: Lista de participantes (str).
-        output_path: Ruta de salida del archivo Excel.
+def create_sign_sheet_workbook(participant_list: list[tuple[str, str]]) -> Workbook:
+    """
+    Crea la hoja de firmas en Excel con diseño profesional de 2 tablas por fila.
     """
     wb = Workbook()
     ws = wb.active
     ws.title = "Firmas"
-    thin_border = Border(
-        left=Side(style="thin"),
-        right=Side(style="thin"),
-        top=Side(style="thin"),
-        bottom=Side(style="thin"),
-    )
-    thick_border = Border(
-        left=Side(style="thick"),
-        right=Side(style="thick"),
-        top=Side(style="thick"),
-        bottom=Side(style="thick"),
-    )
+
+    styles = _setup_styles()
+    _setup_column_widths(ws)
+    _write_headers(ws, styles)
+    _write_participant_tables(ws, participant_list, styles)
+
+    return wb
+
+def _setup_styles() -> dict:
+    """Define y retorna todos los estilos reutilizables."""
+
+    thin_border = Border(left=Side("thin"), right=Side("thin"),
+                         top=Side("thin"), bottom=Side("thin"))
+    thick_border = Border(left=Side("thick"), right=Side("thick"),
+                          top=Side("thick"), bottom=Side("thick"))
     left_alignment = Alignment(horizontal="left", vertical="center")
     center_alignment = Alignment(horizontal="center", vertical="center")
+
+    return {
+        "thin_border": thin_border,
+        "thick_border": thick_border,
+        "left_alignment": left_alignment,
+        "center_alignment": center_alignment,
+    }
+
+def _setup_column_widths(ws: Worksheet) -> None:
+    """Configura anchos de columna y altura de fila de encabezado."""
     ws.column_dimensions["A"].width = 15
     ws.column_dimensions["B"].width = 30
     ws.column_dimensions["C"].width = 12
@@ -94,86 +107,79 @@ def create_sign_sheet(participant_list: list, output_path: Path) -> None:
     ws.column_dimensions["F"].width = 15
     ws.column_dimensions["G"].width = 30
     ws.column_dimensions["H"].width = 12
-
     ws.row_dimensions[1].height = 20
+
+def _write_headers(ws: Worksheet, styles: dict) -> None:
+    """Escribe los encabezados de las tablas usando los estilos dados."""
     headers = ["Nombre", "Apellidos", "Firma"]
     for col_idx, header in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col_idx, value=header)
-        cell.border = thin_border
-        cell.alignment = center_alignment
+        cell.border = styles["thin_border"]
+        cell.alignment = styles["center_alignment"]
         cell.font = Font(bold=True)
-    # Nueva lógica: escribir tablas de 8 participantes en parejas horizontales
-    tables_per_row = 2  # número de tablas por fila
-    table_rows = 8      # filas por tabla
-    table_cols = 3      # columnas por tabla
-    table_h_spacing = 2 # espacio entre tablas horizontal
-    table_v_spacing = 2 # espacio entre tablas vertical
 
-    num_tables = (len(participant_list) + table_rows - 1) // table_rows
-    for table_idx in range(num_tables):
-        # Calcular posición de la tabla
-        row_block = table_idx // tables_per_row
-        col_block = table_idx % tables_per_row
-        start_row = 2 + row_block * (table_rows + table_v_spacing)
-        start_col = 1 + col_block * (table_cols + table_h_spacing)
 
-        # Obtener participantes de este bloque
-        block_participants = participant_list[table_idx * table_rows : (table_idx + 1) * table_rows]
+def _write_participant_tables(ws: Worksheet, participant_list: list[tuple[str, str]], styles: dict) -> None:
+    """Escribe todas las tablas de firmas (2 por fila)."""
+    TABLES_PER_ROW = 2
+    ROWS_PER_TABLE = 8
+    H_SPACING = 2
+    V_SPACING = 2
 
-        for row_in_table, participant in enumerate(block_participants):
-            first_name, last_name = participant
-            is_first_row = row_in_table == 0
-            is_last_row = row_in_table == table_rows - 1 or row_in_table == len(block_participants) - 1
-            for col_in_table in range(table_cols):
-                col = start_col + col_in_table
-                left = "thick" if col_in_table == 0 else "thin"
-                right = "thick" if col_in_table == table_cols - 1 else "thin"
-                top = "thick" if is_first_row else "thin"
-                bottom = "thick" if is_last_row else "thin"
-                border = Border(
-                    left=Side(style=left),
-                    right=Side(style=right),
-                    top=Side(style=top),
-                    bottom=Side(style=bottom),
-                )
-                if col_in_table == 0:
-                    value = first_name
-                    alignment = left_alignment
-                elif col_in_table == 1:
-                    value = last_name
-                    alignment = left_alignment
-                else:
-                    value = ""
-                    alignment = left_alignment
-                cell = ws.cell(row=start_row + row_in_table, column=col, value=value)
-                cell.border = border
-                cell.alignment = alignment
-            ws.row_dimensions[start_row + row_in_table].height = 25
-    try:
-        wb.save(output_path)
-        print(f"✓ Archivo generado exitosamente en: {output_path}")
-        print(f"✓ Total de participantes procesados: {len(participant_list)}")
-    except Exception as e:
-        print(f"Error al guardar el archivo: {e}")
+    total_tables = (len(participant_list) + ROWS_PER_TABLE - 1) // ROWS_PER_TABLE
 
-# Nuevo método para crear PDF de hoja de firmas
-def create_sign_pdf(participant_list: list, output_path: Path, subject: str = None, group: str = None, week: int = None, day1: str = 'primera', day2: str = 'segunda') -> None:
+    for table_idx in range(total_tables):
+        row_block = table_idx // TABLES_PER_ROW
+        col_block = table_idx % TABLES_PER_ROW
+
+        start_row = 2 + row_block * (ROWS_PER_TABLE + V_SPACING)
+        start_col = 1 + col_block * (3 + H_SPACING)
+
+        participants_chunk = participant_list[table_idx * ROWS_PER_TABLE : (table_idx + 1) * ROWS_PER_TABLE]
+
+        _write_single_table(ws, participants_chunk, start_row, start_col, styles)
+
+
+def _write_single_table(ws: Worksheet, participants: list[tuple[str, str]], 
+                       start_row: int, start_col: int, styles: dict) -> None:
+    """Escribe una sola tabla de 8 filas máximo."""
+    for row_offset, (first_name, last_name) in enumerate(participants):
+        row = start_row + row_offset
+        is_first_row = row_offset == 0
+        is_last_row = row_offset == len(participants) - 1
+        for col_offset in range(3):
+            col = start_col + col_offset
+            border = _get_cell_border(col_offset, is_first_row, is_last_row)
+            value = [first_name, last_name, ""][col_offset]
+            alignment = styles["left_alignment"]
+            cell = ws.cell(row=row, column=col, value=value)
+            cell.border = border
+            cell.alignment = alignment
+        ws.row_dimensions[row].height = 25
+
+
+def _get_cell_border(col_offset: int, is_first_row: bool, is_last_row: bool) -> Border:
+    """Devuelve el borde correcto según posición en la tabla."""
+    return Border(
+        left=Side("thick" if col_offset == 0 else "thin"),
+        right=Side("thick" if col_offset == 2 else "thin"),
+        top=Side("thick" if is_first_row else "thin"),
+        bottom=Side("thick" if is_last_row else "thin"),
+    )
+
+def save_workbook(wb: Workbook, output_path: Path) -> None:
+    wb.save(output_path)
+
+def create_sign_pdf_html(participant_list: list, subject: str = None, group: str = None, week: int = None, day1: str = 'primera', day2: str = 'segunda') -> str:
     """
-    Crea y guarda la hoja de firmas en PDF usando WeasyPrint y Jinja2.
-
-    Args:
-        participant_list: Lista de participantes (str).
-        output_path: Ruta de salida del archivo PDF.
-        subject: Nombre de la asignatura (opcional).
+    Genera el HTML para la hoja de firmas en PDF usando Jinja2.
+    Returns:
+        HTML string
     """
-    # Agrupar participantes en bloques de 8
     table_rows = 8
     tables_per_row = 2
     blocks = [participant_list[i:i+table_rows] for i in range(0, len(participant_list), table_rows)]
-    # Agrupar bloques en filas de dos
     block_pairs = [blocks[i:i+tables_per_row] for i in range(0, len(blocks), tables_per_row)]
-
-    # HTML y CSS para la hoja de firmas
     html_template = """
     <!DOCTYPE html>
     <html lang='es'>
@@ -216,20 +222,6 @@ def create_sign_pdf(participant_list: list, output_path: Path, subject: str = No
             letter-spacing: 1px;
             margin: 0;
         }
-        .subject-box {
-            background: {{ '#e0e0e0' if subject else '#f5f5f5' }};
-            border: 1px solid #888;
-            border-radius: 6px;
-            padding: 6px 18px;
-            font-size: 13px;
-            font-weight: bold;
-            color: #222;
-            letter-spacing: 1px;
-            box-shadow: 0 1px 4px #bbb;
-        }
-        .subject-placeholder {
-            color: #aaa;
-        }
         .row {
             display: flex;
             flex-direction: row;
@@ -266,7 +258,6 @@ def create_sign_pdf(participant_list: list, output_path: Path, subject: str = No
             font-style: italic;
             font-size: 8px;
         }
-        /* Filas alternas en gris claro */
         tr:nth-child(even) td {
             background: #f6f6f6;
         }
@@ -298,7 +289,8 @@ def create_sign_pdf(participant_list: list, output_path: Path, subject: str = No
                     <tr>
                         <th>Nombre</th>
                         <th>Apellidos</th>
-                        <th class="firma" colspan="2">Firma</th>
+                        <th class="firma">{{ day1 }}</th>
+                        <th class="firma">{{ day2 }}</th>
                     </tr>
                     {% for participant in block %}
                     <tr>
@@ -316,13 +308,10 @@ def create_sign_pdf(participant_list: list, output_path: Path, subject: str = No
     </html>
     """
     template = Template(html_template)
-    html_content = template.render(block_pairs=block_pairs, subject=subject, group=group, week=week, day1=day1, day2=day2)
-    try:
-        HTML(string=html_content).write_pdf(str(output_path))
-        print(f"✓ PDF generado exitosamente en: {output_path}")
-        print(f"✓ Total de participantes procesados: {len(participant_list)}")
-    except Exception as e:
-        print(f"Error al generar el PDF: {e}")
+    return template.render(block_pairs=block_pairs, subject=subject, group=group, week=week, day1=day1, day2=day2)
+
+def save_pdf_from_html(html_content: str, output_path: Path) -> None:
+    HTML(string=html_content).write_pdf(str(output_path))
 
 def process_signatures_file() -> None:
     """
@@ -335,7 +324,7 @@ def process_signatures_file() -> None:
     participant_list = get_participants()
     if not participant_list:
         return
-    create_sign_sheet(participant_list, output_path)
+    create_sign_sheet_workbook(participant_list)
     # Solicitar nombre de asignatura al usuario
     import sys
     subject = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1].strip() else None
@@ -354,7 +343,8 @@ def process_signatures_file() -> None:
         day2 = ''
     if not day2:
         day2 = 'segunda'
-    create_sign_pdf(participant_list, pdf_output_path, subject, group, week, day1, day2)
+    save_workbook(create_sign_sheet_workbook(participant_list), output_path)
+    save_pdf_from_html(create_sign_pdf_html(participant_list, subject, group, week, day1, day2), pdf_output_path)
     print("✓ PDF de firmas también generado en result/hoja_firmas.pdf")
 
 if __name__ == "__main__":
