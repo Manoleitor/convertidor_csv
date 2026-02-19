@@ -1,0 +1,18 @@
+{
+    // See https://code.visualstudio.com/docs/python/debugging for details
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug test_process_signatures.py",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/test_process_signatures.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PKG_CONFIG_PATH": "/opt/homebrew/lib/pkgconfig:/opt/homebrew/share/pkgconfig",
+                "DYLD_LIBRARY_PATH": "/opt/homebrew/lib"
+            }
+        }
+    ]
+}
